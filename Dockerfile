@@ -30,3 +30,6 @@ EXPOSE 3000
 
 # アプリ起動
 CMD ["npm", "start"]
+
+# ← この1行を追加（内容は何でもOK）
+# force rebuild

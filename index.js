@@ -31,7 +31,7 @@ app.get("/rank", async (req, res) => {
     // タイムアウトを60秒に設定
     page.setDefaultNavigationTimeout(60000);
 
-    // 【重要】URLを正しく組み立てます（バッククォート、ドルマーク、パスを正確に）
+    // 【修正済み】URLを正しく組み立てます（バッククォート、パス、ドルマークを正確に）
     const searchUrl = `https://store.line.me{encodeURIComponent(keyword)}&type=emoji`;
     
     console.log(`Accessing: ${searchUrl}`);

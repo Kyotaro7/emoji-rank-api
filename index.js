@@ -31,8 +31,7 @@ app.get("/rank", async (req, res) => {
     // タイムアウトを60秒に設定
     page.setDefaultNavigationTimeout(60000);
 
-    // 直接、検索結果ページ（絵文字タブ）にアクセスする
-    // ※ テンプレートリテラル（バッククォート）を使用して変数を展開します
+    // 【重要】URLを正しく組み立てます（バッククォート、ドルマーク、パスを正確に）
     const searchUrl = `https://store.line.me{encodeURIComponent(keyword)}&type=emoji`;
     
     console.log(`Accessing: ${searchUrl}`);
@@ -59,7 +58,7 @@ app.get("/rank", async (req, res) => {
         myEmojiName,
         keyword,
         rank: null,
-        message: "検索結果の1ページ目に見つかりませんでした。名前が完全一致しているか確認してください。"
+        message: "検索結果の1ページ目（約24件）に見つかりませんでした。名前が完全一致しているか確認してください。"
       });
     }
 

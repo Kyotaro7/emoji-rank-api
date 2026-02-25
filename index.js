@@ -75,7 +75,7 @@ app.get("/rank", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error occurred:", error); // ← ここが重要（詳細ログ）
+    console.error("Error occurred:", error); // ← エラー全体を出す
     res.status(500).json({ error: error.message });
   } finally {
     if (browser) await browser.close();

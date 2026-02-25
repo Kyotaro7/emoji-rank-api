@@ -28,21 +28,21 @@ app.get("/rank", async (req, res) => {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
 
-    // ① ホーム画面を開く
+    console.log("Opening LINE STORE home...");
     await page.goto("https://store.line.me/home/ja", {
       waitUntil: "networkidle2"
     });
 
-    // ② 検索バーにキーワードを入力
+    console.log("Typing keyword:", keyword);
     await page.type("input[name='query']", keyword);
 
-    // ③ Enter で検索実行
+    console.log("Pressing Enter...");
     await page.keyboard.press("Enter");
 
-    // ④ 検索結果ページの読み込みを待つ
+    console.log("Waiting for navigation...");
     await page.waitForNavigation({ waitUntil: "networkidle2" });
 
-    // ⑤ 検索結果の絵文字一覧を取得
+    console.log("Extracting results...");
     const results = await page.evaluate(() => {
       const items = [...document.querySelectorAll(".mdCMN02Li")];
       return items.map((item, index) => {
@@ -55,7 +55,8 @@ app.get("/rank", async (req, res) => {
       });
     });
 
-    // ⑥ 自分の絵文字名を検索
+    console.log("Search results:", results);
+
     const found = results.find(r => r.title === myEmojiName);
 
     if (!found || found.rank > 100) {
@@ -74,7 +75,7 @@ app.get("/rank", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error occurred:", error.message);
+    console.error("Error occurred:", error); // ← ここが重要（詳細ログ）
     res.status(500).json({ error: error.message });
   } finally {
     if (browser) await browser.close();

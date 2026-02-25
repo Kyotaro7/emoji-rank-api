@@ -12,16 +12,27 @@ app.get("/rank", async (req, res) => {
     return res.json({ error: "my と q の2つのパラメータが必要です" });
   }
 
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  });
-
+  let browser;
   try {
+    // RailwayのDocker環境で動かすための必須設定
+    browser = await puppeteer.launch({
+      headless: "new",
+      executablePath: "/usr/bin/chromium", // Dockerfileでインストールしたパスを指定
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage", // メモリ不足によるクラッシュ防止
+        "--disable-gpu"
+      ]
+    });
+
     const page = await browser.newPage();
+    
+    // タイムアウトを少し長め（60秒）に設定
+    page.setDefaultNavigationTimeout(60000);
 
     // ① ホーム画面を開く
-    await page.goto("https://store.line.me/home/ja", {
+    await page.goto("https://store.line.me", {
       waitUntil: "networkidle2"
     });
 
@@ -67,10 +78,18 @@ app.get("/rank", async (req, res) => {
     });
 
   } catch (error) {
-    res.json({ error: error.message });
+    console.error("Error occurred:", error); // Railwayのログに出力
+    res.status(500).json({ error: error.message });
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
+});
+
+// ルートパスへのアクセス時に使い方のヒントを表示
+app.get("/", (req, res) => {
+  res.send("LINE絵文字ランクAPIは稼働中です。/rank?my=名前&q=キーワード でアクセスしてください。");
 });
 
 app.listen(port, () => {

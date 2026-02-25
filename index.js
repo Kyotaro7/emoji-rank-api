@@ -15,7 +15,7 @@ app.get("/rank", async (req, res) => {
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: "new",
+      headless: true,
       executablePath: "/usr/bin/chromium",
       args: [
         "--no-sandbox",
@@ -75,7 +75,7 @@ app.get("/rank", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error occurred:", error); // ← エラー全体を出す
+    console.error("Error occurred:", error);
     res.status(500).json({ error: error.message });
   } finally {
     if (browser) await browser.close();

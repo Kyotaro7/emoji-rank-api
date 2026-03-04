@@ -28,34 +28,24 @@ app.get("/rank", async (req, res) => {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
 
-    console.log("Opening LINE STORE home...");
     await page.goto("https://store.line.me/home/ja", {
       waitUntil: "networkidle2"
     });
 
-    console.log("Typing keyword:", keyword);
+    // 検索欄（name="q"）に入力
     await page.type("input[name='q']", keyword);
-
-    console.log("Pressing Enter...");
     await page.keyboard.press("Enter");
 
-    console.log("Waiting for navigation...");
     await page.waitForNavigation({ waitUntil: "networkidle2" });
 
-    console.log("Extracting results...");
+    // 結果の取得（現在の LINE STORE に対応）
     const results = await page.evaluate(() => {
-      const items = [...document.querySelectorAll(".mdCMN02Li")];
-      return items.map((item, index) => {
-        const titleEl = item.querySelector(".mdCMN02Ttl");
-        const title = titleEl ? titleEl.textContent.trim() : null;
-        return {
-          title,
-          rank: index + 1
-        };
-      });
+      const items = [...document.querySelectorAll("[data-test='search-emoji-item-name']")];
+      return items.map((item, index) => ({
+        title: item.textContent.trim(),
+        rank: index + 1
+      }));
     });
-
-    console.log("Search results:", results);
 
     const found = results.find(r => r.title === myEmojiName);
 
@@ -75,7 +65,6 @@ app.get("/rank", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error occurred:", error);
     res.status(500).json({ error: error.message });
   } finally {
     if (browser) await browser.close();

@@ -1,9 +1,10 @@
-import cors from "cors";
-app.use(cors());
 import express from "express";
+import cors from "cors";
 import puppeteer from "puppeteer";
 
 const app = express();
+app.use(cors());
+
 const port = process.env.PORT || 3000;
 
 app.get("/rank", async (req, res) => {
@@ -17,24 +18,25 @@ app.get("/rank", async (req, res) => {
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: true,
+      headless: "new",
       executablePath: "/usr/bin/chromium",
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-gpu"
+        "--disable-gpu",
+        "--disable-software-rasterizer"
       ]
     });
 
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
 
-    // 絵文字検索ページに直接アクセス（最新仕様）
+    // LINE STORE 絵文字検索ページ（最新仕様）
     const searchUrl = `https://store.line.me/search/emoji/ja?q=${encodeURIComponent(keyword)}`;
     await page.goto(searchUrl, { waitUntil: "networkidle2" });
 
-    // 結果の取得（最新の LINE STORE に対応）
+    // 結果の抽出（最新の DOM 構造に対応）
     const results = await page.evaluate(() => {
       const items = [...document.querySelectorAll("[data-test='search-emoji-item-name']")];
       return items.map((item, index) => ({
@@ -68,7 +70,7 @@ app.get("/rank", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("LINE絵文字ランクAPIは正常に稼働中です。/rank?my=名前&q=キーワード で検索してください。");
+  res.send("LINE絵文字ランクAPIは稼働中です。/rank?my=名前&q=キーワード で検索できます。");
 });
 
 app.listen(port, "0.0.0.0", () => {

@@ -1,3 +1,5 @@
+import cors from "cors";
+app.use(cors());
 import express from "express";
 import puppeteer from "puppeteer";
 

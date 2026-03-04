@@ -3,10 +3,70 @@ import cors from "cors";
 import puppeteer from "puppeteer";
 
 const app = express();
-app.use(cors());
-
 const port = process.env.PORT || 3000;
 
+app.use(cors());
+
+// ------------------------------
+// 共通：複数ページを並列で読み込む関数
+// ------------------------------
+async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selectorConfig) {
+  const results = Array(endPage + 1).fill(null);
+
+  const tasks = [];
+  for (let p = startPage; p <= endPage; p++) {
+    tasks.push((async () => {
+      const page = await browser.newPage();
+
+      // 画像読み込みをブロック（高速化）
+      await page.setRequestInterception(true);
+      page.on("request", (req) => {
+        if (req.resourceType() === "image") req.abort();
+        else req.continue();
+      });
+
+      const url =
+        p === 1
+          ? `${baseUrl}?q=${encodeURIComponent(keyword)}`
+          : `${baseUrl}?q=${encodeURIComponent(keyword)}&page=${p}`;
+
+      console.log("Opening:", url);
+      await page.goto(url, { waitUntil: "domcontentloaded" });
+
+      try {
+        await page.waitForSelector(selectorConfig.list, { timeout: 15000 });
+
+        const pageResults = await page.evaluate((selectorConfig) => {
+          const ul = document.querySelector(selectorConfig.list);
+          if (!ul) return [];
+
+          const items = [...ul.querySelectorAll(selectorConfig.item)];
+
+          return items.map((item) => {
+            const titleEl = item.querySelector(selectorConfig.title);
+            const title = titleEl ? titleEl.textContent.trim() : null;
+            return { title };
+          });
+        }, selectorConfig);
+
+        results[p] = pageResults;
+
+      } catch (e) {
+        results[p] = [];
+      }
+
+      await page.close();
+    })());
+  }
+
+  await Promise.all(tasks);
+
+  return results;
+}
+
+// ------------------------------
+// 絵文字検索 /rank
+// ------------------------------
 app.get("/rank", async (req, res) => {
   const myEmojiName = req.query.my;
   const keyword = req.query.q;
@@ -29,50 +89,122 @@ app.get("/rank", async (req, res) => {
       ]
     });
 
-    const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(60000);
+    let rankCounter = 1;
 
-    // LINE STORE 絵文字検索ページ（最新仕様）
-    const searchUrl = `https://store.line.me/search/emoji/ja?q=${encodeURIComponent(keyword)}`;
-    await page.goto(searchUrl, { waitUntil: "networkidle2" });
+    const selectorEmoji = {
+      list: 'ul[data-test="search-emoji-item-list"]',
+      item: "li",
+      title: '[data-test="search-emoji-item-name"]'
+    };
 
-    // 結果の抽出（最新の DOM 構造に対応）
-    const results = await page.evaluate(() => {
-      const items = [...document.querySelectorAll("[data-test='search-emoji-item-name']")];
-      return items.map((item, index) => ({
-        title: item.textContent.trim(),
-        rank: index + 1
-      }));
-    });
+    const baseUrl = "https://store.line.me/search/emoji/ja";
 
-    const found = results.find(r => r.title === myEmojiName);
+    // 1〜7ページ
+    const batch1 = await fetchPages(browser, baseUrl, keyword, 1, 7, selectorEmoji);
 
-    if (!found || found.rank > 500) {
-      return res.json({
-        myEmojiName,
-        keyword,
-        rank: null,
-        message: "500位以内に見つかりませんでした"
-      });
+    for (let p = 1; p <= 7; p++) {
+      for (const item of batch1[p]) {
+        if (item.title === myEmojiName) {
+          return res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: p });
+        }
+        rankCounter++;
+      }
     }
 
-    res.json({
-      myEmojiName,
-      keyword,
-      rank: found.rank
-    });
+    // 8〜14ページ
+    const batch2 = await fetchPages(browser, baseUrl, keyword, 8, 14, selectorEmoji);
+
+    for (let p = 8; p <= 14; p++) {
+      for (const item of batch2[p]) {
+        if (item.title === myEmojiName) {
+          return res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: p });
+        }
+        rankCounter++;
+        if (rankCounter > 500) break;
+      }
+      if (rankCounter > 500) break;
+    }
+
+    return res.json({ myEmojiName, keyword, rank: null, foundPage: null });
 
   } catch (error) {
+    console.error("Error occurred:", error);
     res.status(500).json({ error: error.message });
   } finally {
     if (browser) await browser.close();
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("LINE絵文字ランクAPIは稼働中です。/rank?my=名前&q=キーワード で検索できます。");
+// ------------------------------
+// スタンプ検索 /rank-stamp
+// ------------------------------
+app.get("/rank-stamp", async (req, res) => {
+  const myStampName = req.query.my;
+  const keyword = req.query.q;
+
+  if (!myStampName || !keyword) {
+    return res.json({ error: "my と q の2つのパラメータが必要です" });
+  }
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: "new",
+      executablePath: "/usr/bin/chromium",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer"
+      ]
+    });
+
+    let rankCounter = 1;
+
+    const selectorStamp = {
+      list: 'ul[data-test="search-sticker-item-list"]',
+      item: "li",
+      title: '[data-test="search-sticker-item-name"]'
+    };
+
+    const baseUrl = "https://store.line.me/search/sticker/ja";
+
+    const batch1 = await fetchPages(browser, baseUrl, keyword, 1, 7, selectorStamp);
+
+    for (let p = 1; p <= 7; p++) {
+      for (const item of batch1[p]) {
+        if (item.title === myStampName) {
+          return res.json({ myStampName, keyword, rank: rankCounter, foundPage: p });
+        }
+        rankCounter++;
+      }
+    }
+
+    const batch2 = await fetchPages(browser, baseUrl, keyword, 8, 14, selectorStamp);
+
+    for (let p = 8; p <= 14; p++) {
+      for (const item of batch2[p]) {
+        if (item.title === myStampName) {
+          return res.json({ myStampName, keyword, rank: rankCounter, foundPage: p });
+        }
+        rankCounter++;
+        if (rankCounter > 500) break;
+      }
+      if (rankCounter > 500) break;
+    }
+
+    return res.json({ myStampName, keyword, rank: null, foundPage: null });
+
+  } catch (error) {
+    console.error("Error occurred:", error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (browser) await browser.close();
+  }
 });
 
+// ------------------------------
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on port ${port}`);
 });

@@ -1,4 +1,4 @@
-{
+{ "cors": "^2.8.5",
   "name": "emoji-rank-api",
   "version": "1.0.0",
   "main": "index.js",

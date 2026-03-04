@@ -28,17 +28,11 @@ app.get("/rank", async (req, res) => {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
 
-    await page.goto("https://store.line.me/home/ja", {
-      waitUntil: "networkidle2"
-    });
+    // 絵文字検索ページに直接アクセス（最新仕様）
+    const searchUrl = `https://store.line.me/search/emoji/ja?q=${encodeURIComponent(keyword)}`;
+    await page.goto(searchUrl, { waitUntil: "networkidle2" });
 
-    // 検索欄（name="q"）に入力
-    await page.type("input[name='q']", keyword);
-    await page.keyboard.press("Enter");
-
-    await page.waitForNavigation({ waitUntil: "networkidle2" });
-
-    // 結果の取得（現在の LINE STORE に対応）
+    // 結果の取得（最新の LINE STORE に対応）
     const results = await page.evaluate(() => {
       const items = [...document.querySelectorAll("[data-test='search-emoji-item-name']")];
       return items.map((item, index) => ({
@@ -49,12 +43,12 @@ app.get("/rank", async (req, res) => {
 
     const found = results.find(r => r.title === myEmojiName);
 
-    if (!found || found.rank > 100) {
+    if (!found || found.rank > 500) {
       return res.json({
         myEmojiName,
         keyword,
         rank: null,
-        message: "100位以内に見つかりませんでした"
+        message: "500位以内に見つかりませんでした"
       });
     }
 

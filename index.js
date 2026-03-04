@@ -34,7 +34,7 @@ app.get("/rank", async (req, res) => {
     });
 
     console.log("Typing keyword:", keyword);
-    await page.type("input[name='query']", keyword);
+    await page.type("input[name='q']", keyword);
 
     console.log("Pressing Enter...");
     await page.keyboard.press("Enter");

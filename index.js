@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 
 // ------------------------------
-// 共通：複数ページを並列で読み込む関数
+// 共通：複数ページを並列で読み込む関数（画像読み込みあり）
 // ------------------------------
 async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selectorConfig) {
   const results = Array(endPage + 1).fill(null);
@@ -17,13 +17,6 @@ async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selecto
   for (let p = startPage; p <= endPage; p++) {
     tasks.push((async () => {
       const page = await browser.newPage();
-
-      // 画像読み込みをブロック（高速化）
-      await page.setRequestInterception(true);
-      page.on("request", (req) => {
-        if (req.resourceType() === "image") req.abort();
-        else req.continue();
-      });
 
       const url =
         p === 1
@@ -99,7 +92,6 @@ app.get("/rank", async (req, res) => {
 
     const baseUrl = "https://store.line.me/search/emoji/ja";
 
-    // 1〜7ページ
     const batch1 = await fetchPages(browser, baseUrl, keyword, 1, 7, selectorEmoji);
 
     for (let p = 1; p <= 7; p++) {
@@ -111,7 +103,6 @@ app.get("/rank", async (req, res) => {
       }
     }
 
-    // 8〜14ページ
     const batch2 = await fetchPages(browser, baseUrl, keyword, 8, 14, selectorEmoji);
 
     for (let p = 8; p <= 14; p++) {

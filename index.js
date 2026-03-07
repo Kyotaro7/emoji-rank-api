@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 
 // ------------------------------
-// 共通：複数ページを並列で読み込む関数（画像読み込みあり）
+// 共通：複数ページを並列で読み込む関数（画像ブロック追加版）
 // ------------------------------
 async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selectorConfig) {
   const results = Array(endPage + 1).fill(null);
@@ -17,6 +17,13 @@ async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selecto
   for (let p = startPage; p <= endPage; p++) {
     tasks.push((async () => {
       const page = await browser.newPage();
+
+      // ★ 画像ブロック（ローカル版と同じ）
+      await page.setRequestInterception(true);
+      page.on("request", (req) => {
+        if (req.resourceType() === "image") req.abort();
+        else req.continue();
+      });
 
       const url =
         p === 1
@@ -75,10 +82,7 @@ app.get("/rank", async (req, res) => {
       executablePath: "/usr/bin/chromium",
       args: [
         "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-software-rasterizer"
+        "--disable-setuid-sandbox"
       ]
     });
 
@@ -144,10 +148,7 @@ app.get("/rank-stamp", async (req, res) => {
       executablePath: "/usr/bin/chromium",
       args: [
         "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-software-rasterizer"
+        "--disable-setuid-sandbox"
       ]
     });
 

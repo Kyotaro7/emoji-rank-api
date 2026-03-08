@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 
 // ------------------------------
-// 共通：複数ページを並列で読み込む関数（画像ブロック追加版）
+// 共通：複数ページを並列で読み込む関数（画像ブロック＋日本語固定）
 // ------------------------------
 async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selectorConfig) {
   const results = Array(endPage + 1).fill(null);
@@ -18,7 +18,12 @@ async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selecto
     tasks.push((async () => {
       const page = await browser.newPage();
 
-      // ★ 画像ブロック（ローカル版と同じ）
+      // ★ 日本語ページを強制
+      await page.setExtraHTTPHeaders({
+        "Accept-Language": "ja-JP,ja;q=0.9"
+      });
+
+      // ★ 画像ブロック（順位ズレ防止）
       await page.setRequestInterception(true);
       page.on("request", (req) => {
         if (req.resourceType() === "image") req.abort();

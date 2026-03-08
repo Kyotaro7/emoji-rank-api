@@ -8,7 +8,8 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 
 // ------------------------------
-// 共通：複数ページを並列で読み込む関数（画像ブロック＋日本語固定）
+// 共通：複数ページを並列で読み込む関数
+// （日本固定パラメータ + Accept-Language + 画像ブロック）
 // ------------------------------
 async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selectorConfig) {
   const results = Array(endPage + 1).fill(null);
@@ -30,10 +31,11 @@ async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selecto
         else req.continue();
       });
 
+      // ★ 日本固定パラメータ付き URL を生成
       const url =
         p === 1
-          ? `${baseUrl}?q=${encodeURIComponent(keyword)}`
-          : `${baseUrl}?q=${encodeURIComponent(keyword)}&page=${p}`;
+          ? `${baseUrl}&q=${encodeURIComponent(keyword)}`
+          : `${baseUrl}&q=${encodeURIComponent(keyword)}&page=${p}`;
 
       console.log("Opening:", url);
       await page.goto(url, { waitUntil: "domcontentloaded" });
@@ -99,7 +101,8 @@ app.get("/rank", async (req, res) => {
       title: '[data-test="search-emoji-item-name"]'
     };
 
-    const baseUrl = "https://store.line.me/search/emoji/ja";
+    // ★ 日本固定パラメータ付き baseUrl
+    const baseUrl = "https://store.line.me/search/emoji/ja?l=ja&geo=JP";
 
     const batch1 = await fetchPages(browser, baseUrl, keyword, 1, 7, selectorEmoji);
 
@@ -165,7 +168,8 @@ app.get("/rank-stamp", async (req, res) => {
       title: '[data-test="search-sticker-item-name"]'
     };
 
-    const baseUrl = "https://store.line.me/search/sticker/ja";
+    // ★ 日本固定パラメータ付き baseUrl
+    const baseUrl = "https://store.line.me/search/sticker/ja?l=ja&geo=JP";
 
     const batch1 = await fetchPages(browser, baseUrl, keyword, 1, 7, selectorStamp);
 

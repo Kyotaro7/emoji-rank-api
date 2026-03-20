@@ -1,14 +1,18 @@
 {
-  "name": "emoji-rank-api",
+  "name": "stamojirank",
   "version": "1.0.0",
+  "description": "",
   "main": "index.js",
-  "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
-    "express": "^4.18.2",
-    "puppeteer": "19.11.1",
-    "cors": "^2.8.5"
+    "better-sqlite3": "^12.8.0",
+    "express": "^5.2.1",
+    "puppeteer": "^24.37.5"
   }
 }

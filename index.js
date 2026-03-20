@@ -28,7 +28,7 @@ db.prepare(`
 function getJSTDate() {
   const now = new Date();
   const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  return jst.toISOString().slice(0, 10); // YYYY-MM-DD
+  return jst.toISOString().slice(0, 10);
 }
 
 // ------------------------------
@@ -62,7 +62,7 @@ function saveHistory(name, keyword, rank) {
 }
 
 // ------------------------------
-// ★ 履歴取得API（1日1件・最後のデータだけ返す）
+// ★ 履歴取得API
 // ------------------------------
 app.get("/history", (req, res) => {
   const name = req.query.name;
@@ -145,6 +145,24 @@ async function fetchPages(browser, baseUrl, keyword, startPage, endPage, selecto
 }
 
 // ------------------------------
+// Puppeteer 起動設定（VPS 用）
+// ------------------------------
+async function launchBrowser() {
+  return await puppeteer.launch({
+    headless: "new",
+    executablePath: "/usr/bin/chromium-browser",
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--single-process",
+      "--no-zygote"
+    ]
+  });
+}
+
+// ------------------------------
 // 絵文字検索 /rank
 // ------------------------------
 app.get("/rank", async (req, res) => {
@@ -157,10 +175,7 @@ app.get("/rank", async (req, res) => {
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"]
-    });
+    browser = await launchBrowser();
 
     let rankCounter = 1;
 
@@ -222,10 +237,7 @@ app.get("/rank-stamp", async (req, res) => {
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"]
-    });
+    browser = await launchBrowser();
 
     let rankCounter = 1;
 

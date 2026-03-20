@@ -23,7 +23,7 @@ db.prepare(`
 `).run();
 
 // ------------------------------
-// JSTで日付を取得する関数
+// JSTで日付を取得
 // ------------------------------
 function getJSTDate() {
   const now = new Date();
@@ -72,67 +72,64 @@ async function launchBrowser() {
 }
 
 // ------------------------------
-// 3 並列でページを取得（順位計算はしない）
+// 3ページを並列取得（順位判定なし）
 // ------------------------------
-async function fetchPagesParallel(browser, baseUrl, keyword, startPage, endPage, selectorConfig) {
-  const results = [];
-  const concurrency = 3;
+async function fetch3Pages(browser, baseUrl, keyword, startPage, selectorConfig) {
+  const results = {};
+  const tasks = [];
 
-  for (let i = startPage; i <= endPage; i += concurrency) {
-    const group = [];
+  for (let p = startPage; p < startPage + 3; p++) {
+    if (p > 14) break;
 
-    for (let p = i; p < i + concurrency && p <= endPage; p++) {
-      group.push(
-        (async () => {
-          const page = await browser.newPage();
+    tasks.push(
+      (async () => {
+        const page = await browser.newPage();
 
-          await page.setRequestInterception(true);
-          page.on("request", (req) => {
-            if (req.resourceType() === "image") req.abort();
-            else req.continue();
-          });
+        await page.setRequestInterception(true);
+        page.on("request", (req) => {
+          if (req.resourceType() === "image") req.abort();
+          else req.continue();
+        });
 
-          const url =
-            p === 1
-              ? `${baseUrl}?q=${encodeURIComponent(keyword)}`
-              : `${baseUrl}?q=${encodeURIComponent(keyword)}&page=${p}`;
+        const url =
+          p === 1
+            ? `${baseUrl}?q=${encodeURIComponent(keyword)}`
+            : `${baseUrl}?q=${encodeURIComponent(keyword)}&page=${p}`;
 
-          console.log("Opening:", url);
-          await page.goto(url, { waitUntil: "domcontentloaded" });
+        console.log("Opening:", url);
+        await page.goto(url, { waitUntil: "domcontentloaded" });
 
-          try {
-            await page.waitForSelector(selectorConfig.list, { timeout: 15000 });
+        try {
+          await page.waitForSelector(selectorConfig.list, { timeout: 15000 });
 
-            const pageResults = await page.evaluate((selectorConfig) => {
-              const ul = document.querySelector(selectorConfig.list);
-              if (!ul) return [];
+          const pageResults = await page.evaluate((selectorConfig) => {
+            const ul = document.querySelector(selectorConfig.list);
+            if (!ul) return [];
 
-              const items = [...ul.querySelectorAll(selectorConfig.item)];
+            const items = [...ul.querySelectorAll(selectorConfig.item)];
 
-              return items.map((item) => {
-                const titleEl = item.querySelector(selectorConfig.title);
-                return { title: titleEl ? titleEl.textContent.trim() : null };
-              });
-            }, selectorConfig);
+            return items.map((item) => {
+              const titleEl = item.querySelector(selectorConfig.title);
+              return { title: titleEl ? titleEl.textContent.trim() : null };
+            });
+          }, selectorConfig);
 
-            results[p] = pageResults;
-          } catch (e) {
-            results[p] = [];
-          }
+          results[p] = pageResults;
+        } catch (e) {
+          results[p] = [];
+        }
 
-          await page.close();
-        })()
-      );
-    }
-
-    await Promise.all(group);
+        await page.close();
+      })()
+    );
   }
 
+  await Promise.all(tasks);
   return results;
 }
 
 // ------------------------------
-// 絵文字検索 /rank
+// 絵文字検索 /rank（最速版）
 // ------------------------------
 app.get("/rank", async (req, res) => {
   const myEmojiName = req.query.my;
@@ -156,103 +153,27 @@ app.get("/rank", async (req, res) => {
 
     const baseUrl = "https://store.line.me/search/emoji/ja";
 
-    // 1〜7ページを3並列で取得
-    const batch1 = await fetchPagesParallel(browser, baseUrl, keyword, 1, 7, selectorEmoji);
+    // ★ 3ページずつ取得 → 判定 → 即終了
+    for (let startPage = 1; startPage <= 14; startPage += 3) {
+      const pages = await fetch3Pages(browser, baseUrl, keyword, startPage, selectorEmoji);
 
-    // ★ ページ順に rank を正しくカウント
-    for (let p = 1; p <= 7; p++) {
-      const pageResults = batch1[p] || [];
-      for (const item of pageResults) {
-        if (item.title === myEmojiName) {
-          saveHistory(myEmojiName, keyword, rankCounter);
-          return res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: p });
+      for (let p = startPage; p < startPage + 3; p++) {
+        if (p > 14) break;
+
+        const pageResults = pages[p] || [];
+
+        for (const item of pageResults) {
+          if (item.title === myEmojiName) {
+            saveHistory(myEmojiName, keyword, rankCounter);
+            return res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: p });
+          }
+          rankCounter++;
         }
-        rankCounter++;
       }
-    }
-
-    // 8〜14ページ
-    const batch2 = await fetchPagesParallel(browser, baseUrl, keyword, 8, 14, selectorEmoji);
-
-    for (let p = 8; p <= 14; p++) {
-      const pageResults = batch2[p] || [];
-      for (const item of pageResults) {
-        if (item.title === myEmojiName) {
-          saveHistory(myEmojiName, keyword, rankCounter);
-          return res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: p });
-        }
-        rankCounter++;
-        if (rankCounter > 500) break;
-      }
-      if (rankCounter > 500) break;
     }
 
     saveHistory(myEmojiName, keyword, null);
-    res.json({ myEmojiName, keyword, rank: null, foundPage: null });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  } finally {
-    if (browser) await browser.close();
-  }
-});
-
-// ------------------------------
-// スタンプ検索 /rank-stamp
-// ------------------------------
-app.get("/rank-stamp", async (req, res) => {
-  const myStampName = req.query.my;
-  const keyword = req.query.q;
-
-  if (!myStampName || !keyword) {
-    return res.json({ error: "my と q が必要です" });
-  }
-
-  let browser;
-  try {
-    browser = await launchBrowser();
-
-    let rankCounter = 1;
-
-    const selectorStamp = {
-      list: 'ul[data-test="search-sticker-item-list"]',
-      item: "li",
-      title: '[data-test="search-sticker-item-name"]'
-    };
-
-    const baseUrl = "https://store.line.me/search/sticker/ja";
-
-    const batch1 = await fetchPagesParallel(browser, baseUrl, keyword, 1, 7, selectorStamp);
-
-    for (let p = 1; p <= 7; p++) {
-      const pageResults = batch1[p] || [];
-      for (const item of pageResults) {
-        if (item.title === myStampName) {
-          saveHistory(myStampName, keyword, rankCounter);
-          return res.json({ myStampName, keyword, rank: rankCounter, foundPage: p });
-        }
-        rankCounter++;
-      }
-    }
-
-    const batch2 = await fetchPagesParallel(browser, baseUrl, keyword, 8, 14, selectorStamp);
-
-    for (let p = 8; p <= 14; p++) {
-      const pageResults = batch2[p] || [];
-      for (const item of pageResults) {
-        if (item.title === myStampName) {
-          saveHistory(myStampName, keyword, rankCounter);
-          return res.json({ myStampName, keyword, rank: rankCounter, foundPage: p });
-        }
-        rankCounter++;
-        if (rankCounter > 500) break;
-      }
-      if (rankCounter > 500) break;
-    }
-
-    saveHistory(myStampName, keyword, null);
-    res.json({ myStampName, keyword, rank: null, foundPage: null });
+    return res.json({ myEmojiName, keyword, rank: null, foundPage: null });
 
   } catch (error) {
     console.error(error);

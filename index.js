@@ -54,31 +54,47 @@ function saveHistory(name, keyword, rank) {
 }
 
 // ------------------------------
-// Puppeteer（VPS 用）
+// Puppeteer（VPS 最適化版）
 // ------------------------------
 async function launchBrowser() {
   return await puppeteer.launch({
-    headless: "new",
+    headless: true, // "new" は重いので旧headlessに戻す
     executablePath: "/usr/bin/chromium-browser",
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
-      "--disable-gpu",
       "--disable-dev-shm-usage",
-      "--single-process",
-      "--no-zygote"
+      "--disable-background-networking",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-breakpad",
+      "--disable-default-apps",
+      "--disable-extensions",
+      "--disable-features=site-per-process",
+      "--disable-hang-monitor",
+      "--disable-ipc-flooding-protection",
+      "--disable-popup-blocking",
+      "--disable-prompt-on-repost",
+      "--disable-renderer-backgrounding",
+      "--force-color-profile=srgb",
+      "--metrics-recording-only",
+      "--mute-audio",
+      "--no-first-run",
+      "--no-zygote",
+      "--password-store=basic",
+      "--use-mock-keychain"
     ]
   });
 }
 
 // ------------------------------
-// 3ページを並列取得（順位判定なし）
+// 2ページを並列取得（VPS最適）
 // ------------------------------
-async function fetch3Pages(browser, baseUrl, keyword, startPage, selectorConfig) {
+async function fetch2Pages(browser, baseUrl, keyword, startPage, selectorConfig) {
   const results = {};
   const tasks = [];
 
-  for (let p = startPage; p < startPage + 3; p++) {
+  for (let p = startPage; p < startPage + 2; p++) {
     if (p > 14) break;
 
     tasks.push(
@@ -153,11 +169,11 @@ app.get("/rank", async (req, res) => {
 
     const baseUrl = "https://store.line.me/search/emoji/ja";
 
-    // ★ 3ページずつ取得 → 判定 → 即終了
-    for (let startPage = 1; startPage <= 14; startPage += 3) {
-      const pages = await fetch3Pages(browser, baseUrl, keyword, startPage, selectorEmoji);
+    // ★ 2ページずつ取得 → 判定 → 即終了
+    for (let startPage = 1; startPage <= 14; startPage += 2) {
+      const pages = await fetch2Pages(browser, baseUrl, keyword, startPage, selectorEmoji);
 
-      for (let p = startPage; p < startPage + 3; p++) {
+      for (let p = startPage; p < startPage + 2; p++) {
         if (p > 14) break;
 
         const pageResults = pages[p] || [];

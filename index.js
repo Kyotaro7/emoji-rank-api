@@ -43,9 +43,7 @@ function saveHistory(name, keyword, rank) {
   `).get(name, keyword, today);
 
   if (existing) {
-    db.prepare(`
-      UPDATE history SET rank = ? WHERE id = ?
-    `).run(rank, existing.id);
+    db.prepare(`UPDATE history SET rank = ? WHERE id = ?`).run(rank, existing.id);
     return;
   }
 
@@ -74,9 +72,9 @@ async function launchBrowser() {
 }
 
 // ------------------------------
-// 3 並列でページを読み込む
+// 3 並列でページを取得（順位計算はしない）
 // ------------------------------
-async function fetchPagesParallel(browser, baseUrl, keyword, startPage, endPage, selectorConfig, foundCallback) {
+async function fetchPagesParallel(browser, baseUrl, keyword, startPage, endPage, selectorConfig) {
   const results = [];
   const concurrency = 3;
 
@@ -118,31 +116,19 @@ async function fetchPagesParallel(browser, baseUrl, keyword, startPage, endPage,
             }, selectorConfig);
 
             results[p] = pageResults;
-
-            // 見つかったら即終了
-            if (foundCallback(pageResults, p)) {
-              await page.close();
-              return "FOUND";
-            }
-
           } catch (e) {
             results[p] = [];
           }
 
           await page.close();
-          return "OK";
         })()
       );
     }
 
-    const statuses = await Promise.all(group);
-
-    if (statuses.includes("FOUND")) {
-      return { results, found: true };
-    }
+    await Promise.all(group);
   }
 
-  return { results, found: false };
+  return results;
 }
 
 // ------------------------------
@@ -170,52 +156,36 @@ app.get("/rank", async (req, res) => {
 
     const baseUrl = "https://store.line.me/search/emoji/ja";
 
-    // batch1（1〜7ページ）
-    const batch1 = await fetchPagesParallel(
-      browser,
-      baseUrl,
-      keyword,
-      1,
-      7,
-      selectorEmoji,
-      (pageResults, pageNum) => {
-        for (const item of pageResults) {
-          if (item.title === myEmojiName) {
-            saveHistory(myEmojiName, keyword, rankCounter);
-            res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: pageNum });
-            return true;
-          }
-          rankCounter++;
+    // 1〜7ページを3並列で取得
+    const batch1 = await fetchPagesParallel(browser, baseUrl, keyword, 1, 7, selectorEmoji);
+
+    // ★ ページ順に rank を正しくカウント
+    for (let p = 1; p <= 7; p++) {
+      const pageResults = batch1[p] || [];
+      for (const item of pageResults) {
+        if (item.title === myEmojiName) {
+          saveHistory(myEmojiName, keyword, rankCounter);
+          return res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: p });
         }
-        return false;
+        rankCounter++;
       }
-    );
+    }
 
-    if (batch1.found) return;
+    // 8〜14ページ
+    const batch2 = await fetchPagesParallel(browser, baseUrl, keyword, 8, 14, selectorEmoji);
 
-    // batch2（8〜14ページ）
-    const batch2 = await fetchPagesParallel(
-      browser,
-      baseUrl,
-      keyword,
-      8,
-      14,
-      selectorEmoji,
-      (pageResults, pageNum) => {
-        for (const item of pageResults) {
-          if (item.title === myEmojiName) {
-            saveHistory(myEmojiName, keyword, rankCounter);
-            res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: pageNum });
-            return true;
-          }
-          rankCounter++;
-          if (rankCounter > 500) return true;
+    for (let p = 8; p <= 14; p++) {
+      const pageResults = batch2[p] || [];
+      for (const item of pageResults) {
+        if (item.title === myEmojiName) {
+          saveHistory(myEmojiName, keyword, rankCounter);
+          return res.json({ myEmojiName, keyword, rank: rankCounter, foundPage: p });
         }
-        return false;
+        rankCounter++;
+        if (rankCounter > 500) break;
       }
-    );
-
-    if (batch2.found) return;
+      if (rankCounter > 500) break;
+    }
 
     saveHistory(myEmojiName, keyword, null);
     res.json({ myEmojiName, keyword, rank: null, foundPage: null });
@@ -253,52 +223,33 @@ app.get("/rank-stamp", async (req, res) => {
 
     const baseUrl = "https://store.line.me/search/sticker/ja";
 
-    // batch1（1〜7ページ）
-    const batch1 = await fetchPagesParallel(
-      browser,
-      baseUrl,
-      keyword,
-      1,
-      7,
-      selectorStamp,
-      (pageResults, pageNum) => {
-        for (const item of pageResults) {
-          if (item.title === myStampName) {
-            saveHistory(myStampName, keyword, rankCounter);
-            res.json({ myStampName, keyword, rank: rankCounter, foundPage: pageNum });
-            return true;
-          }
-          rankCounter++;
+    const batch1 = await fetchPagesParallel(browser, baseUrl, keyword, 1, 7, selectorStamp);
+
+    for (let p = 1; p <= 7; p++) {
+      const pageResults = batch1[p] || [];
+      for (const item of pageResults) {
+        if (item.title === myStampName) {
+          saveHistory(myStampName, keyword, rankCounter);
+          return res.json({ myStampName, keyword, rank: rankCounter, foundPage: p });
         }
-        return false;
+        rankCounter++;
       }
-    );
+    }
 
-    if (batch1.found) return;
+    const batch2 = await fetchPagesParallel(browser, baseUrl, keyword, 8, 14, selectorStamp);
 
-    // batch2（8〜14ページ）
-    const batch2 = await fetchPagesParallel(
-      browser,
-      baseUrl,
-      keyword,
-      8,
-      14,
-      selectorStamp,
-      (pageResults, pageNum) => {
-        for (const item of pageResults) {
-          if (item.title === myStampName) {
-            saveHistory(myStampName, keyword, rankCounter);
-            res.json({ myStampName, keyword, rank: rankCounter, foundPage: pageNum });
-            return true;
-          }
-          rankCounter++;
-          if (rankCounter > 500) return true;
+    for (let p = 8; p <= 14; p++) {
+      const pageResults = batch2[p] || [];
+      for (const item of pageResults) {
+        if (item.title === myStampName) {
+          saveHistory(myStampName, keyword, rankCounter);
+          return res.json({ myStampName, keyword, rank: rankCounter, foundPage: p });
         }
-        return false;
+        rankCounter++;
+        if (rankCounter > 500) break;
       }
-    );
-
-    if (batch2.found) return;
+      if (rankCounter > 500) break;
+    }
 
     saveHistory(myStampName, keyword, null);
     res.json({ myStampName, keyword, rank: null, foundPage: null });
